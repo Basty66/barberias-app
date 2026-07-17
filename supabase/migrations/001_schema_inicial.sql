@@ -206,6 +206,8 @@ CREATE OR REPLACE FUNCTION reservar_turno(
   p_notas TEXT DEFAULT NULL
 ) RETURNS JSONB
 LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = 'public'
 AS $$
 DECLARE
   v_cita_id UUID;
