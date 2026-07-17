@@ -1,5 +1,6 @@
 import { Routes, Route } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { Toaster } from 'sonner'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Reserva from './pages/Reserva'
@@ -12,6 +13,7 @@ import NotFound from './pages/NotFound'
 function App() {
   return (
     <AuthProvider>
+      <Toaster richColors position="top-right" />
       <Routes>
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />

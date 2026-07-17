@@ -25,13 +25,12 @@
     --ring: 221.2 83.2% 53.3%;
     --radius: 0.5rem;
   }
-}
 
-@layer base {
   * {
-    @apply border-[hsl(var(--border))];
+    @apply border-border;
   }
+
   body {
-    @apply bg-[hsl(var(--background))] text-[hsl(var(--foreground))];
+    @apply bg-background text-foreground;
   }
 }
