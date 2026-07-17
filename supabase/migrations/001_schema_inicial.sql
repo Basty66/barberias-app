@@ -101,9 +101,10 @@ CREATE TABLE configuracion_estetica (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
--- Insertar fila por defecto
-INSERT INTO configuracion_estetica (nombre_negocio) VALUES ('Mi Barbería')
-ON CONFLICT DO NOTHING;
+-- Insertar fila por defecto (solo si no existe)
+INSERT INTO configuracion_estetica (nombre_negocio)
+SELECT 'Mi Barbería'
+WHERE NOT EXISTS (SELECT 1 FROM configuracion_estetica LIMIT 1);
 
 -- 2.8 notificaciones
 CREATE TABLE notificaciones (
@@ -198,7 +199,7 @@ CREATE OR REPLACE FUNCTION reservar_turno(
   p_servicio_id UUID,
   p_fecha DATE,
   p_hora_inicio TIME,
-  p_hora_fin TIME CHECK (p_hora_fin > p_hora_inicio),
+  p_hora_fin TIME,
   p_cliente_nombre TEXT,
   p_cliente_telefono TEXT,
   p_cliente_email TEXT DEFAULT NULL,
@@ -212,6 +213,11 @@ DECLARE
 BEGIN
   -- Obtener configuración del negocio
   SELECT * INTO v_config FROM configuracion_estetica LIMIT 1;
+
+  -- Validar que hora_fin > hora_inicio
+  IF p_hora_fin <= p_hora_inicio THEN
+    RETURN jsonb_build_object('exito', false, 'error', 'La hora de fin debe ser mayor a la hora de inicio');
+  END IF;
 
   -- Validar límite mínimo de anticipación
   IF p_fecha = CURRENT_DATE
