@@ -1,5 +1,5 @@
 const CACHE_NAME = 'barberia-v1'
-const urlsToCache = ['/', '/index.html', '/manifest.json']
+const urlsToCache = ['/', '/index.html', '/manifest.json', '/icons/icon-192x192.png', '/icons/icon-512x512.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(urlsToCache)))
@@ -12,15 +12,18 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return
+  if (event.request.url.includes('/functions/v1/') || event.request.url.includes('supabase.co')) {
+    return
+  }
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      return response || fetch(event.request).then((res) => {
-        if (res.status === 200) {
-          const clone = res.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
-        }
-        return res
-      })
+    fetch(event.request).then((res) => {
+      if (res.status === 200 && event.request.mode === 'navigate') {
+        const clone = res.clone()
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone))
+      }
+      return res
+    }).catch(() => {
+      return caches.match(event.request).then((response) => response || caches.match('/'))
     })
   )
 })
@@ -38,7 +41,7 @@ self.addEventListener('push', (event) => {
     icon: '/icons/icon-192x192.png',
     badge: '/icons/icon-192x192.png',
     vibrate: [200, 100, 200],
-    data: { url: data.data?.url || '/' },
+    data: { url: (data.data && data.data.url) || '/' },
   }
 
   event.waitUntil(self.registration.showNotification(data.title, options))

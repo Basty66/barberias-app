@@ -48,9 +48,11 @@ export default function usePushSubscription() {
         applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY),
       })
 
+      const subJSON = sub.toJSON()
       const { error } = await supabase.from('push_subscriptions').insert({
         perfil_id: profile.id,
-        suscripcion: sub.toJSON(),
+        endpoint: subJSON.endpoint,
+        keys: subJSON.keys,
       })
 
       if (error) { toast.error(error.message); return }

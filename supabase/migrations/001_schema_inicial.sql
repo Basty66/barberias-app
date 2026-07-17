@@ -436,14 +436,15 @@ CREATE POLICY "Público consulta horarios especiales" ON horarios_especiales
 
 -- 6. CRON JOBS
 
--- Limpiar citas pendientes cada 15 minutos
+-- Limpiar citas pendientes abandonadas cada hora (mayor a 2 horas sin pago)
 SELECT cron.schedule(
   'limpiar-citas-pendientes',
-  '*/15 * * * *',
+  '0 * * * *',
   $$
   DELETE FROM citas
   WHERE estado = 'pendiente'
-    AND created_at < NOW() - INTERVAL '15 minutes';
+    AND created_at < NOW() - INTERVAL '2 hours'
+    AND pago_id IS NULL;
   $$
 );
 
