@@ -18,6 +18,9 @@ function App() {
         <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/reserva" element={<Reserva />} />
+        <Route path="/reserva/exito" element={<Reserva />} />
+        <Route path="/reserva/error" element={<Reserva />} />
+        <Route path="/reserva/pendiente" element={<Reserva />} />
         <Route path="/admin" element={<AdminDashboard />} />
         <Route path="/admin/servicios" element={<AdminServicios />} />
         <Route path="/admin/barberos" element={<AdminBarberos />} />

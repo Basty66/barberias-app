@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { Servicio, Barbero } from '../types'
 import Calendario from '../components/reserva/Calendario'
@@ -7,14 +8,16 @@ import { Button } from '../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
-import { Scissors, User, Calendar, Clock, CheckCircle } from 'lucide-react'
+import { Scissors, User, Calendar, Clock, CheckCircle, AlertCircle, Loader } from 'lucide-react'
 import { toast } from 'sonner'
-import { useNavigate } from 'react-router-dom'
 
 type Paso = 'servicio' | 'barbero' | 'fecha' | 'horario' | 'datos' | 'confirmacion'
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL
+
 export default function Reserva() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const [paso, setPaso] = useState<Paso>('servicio')
   const [servicios, setServicios] = useState<Servicio[]>([])
   const [barberos, setBarberos] = useState<Barbero[]>([])
@@ -26,6 +29,20 @@ export default function Reserva() {
   const [horarioSel, setHorarioSel] = useState<string | null>(null)
   const [cliente, setCliente] = useState({ nombre: '', telefono: '', email: '', notas: '' })
   const [reservando, setReservando] = useState(false)
+
+  // Manejar retorno de Mercado Pago
+  const status = searchParams.get('status')
+  const collectionId = searchParams.get('collection_id')
+
+  useEffect(() => {
+    if (status === 'approved') {
+      setPaso('confirmacion')
+      // Actualizar estado si el webhook no lo hizo aún
+      if (collectionId) {
+        supabase.from('citas').update({ estado: 'pagada' }).eq('pago_id', collectionId).then()
+      }
+    }
+  }, [status])
 
   useEffect(() => {
     supabase.from('servicios').select('*').eq('activo', true).order('nombre').then(({ data }) => {
@@ -66,6 +83,7 @@ export default function Reserva() {
     const fecha = fechaSel.toISOString().split('T')[0]
     const horaFin = sumarMinutos(horarioSel, servicioSel.duracion_minutos)
 
+    // 1. Reservar el turno (RPC)
     const { data, error } = await supabase.rpc('reservar_turno', {
       p_barbero_id: barberoSel.id,
       p_servicio_id: servicioSel.id,
@@ -78,21 +96,43 @@ export default function Reserva() {
       p_notas: cliente.notas || null,
     })
 
-    setReservando(false)
-
-    if (error) {
-      toast.error(error.message)
+    if (error || !data?.exito) {
+      toast.error(error?.message || data?.error || 'Error al reservar')
+      setReservando(false)
       return
     }
 
-    const res = data as { exito: boolean; cita_id?: string; mensaje?: string; error?: string }
+    const citaIdRes = (data as any).cita_id
 
-    if (res.exito) {
+    // 2. Crear preferencia de pago en Mercado Pago
+    try {
+      const functionUrl = `${SUPABASE_URL}/functions/v1/create-preference`
+      const mpResponse = await fetch(functionUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          citaId: citaIdRes,
+          titulo: servicioSel.nombre,
+          precio: servicioSel.precio,
+          cantidad: 1,
+        }),
+      })
+
+      const mpData = await mpResponse.json()
+
+      if (mpData.init_point) {
+        // Redirigir a Mercado Pago
+        window.location.href = mpData.init_point
+      } else {
+        toast.error('Error al generar el pago')
+        setPaso('confirmacion')
+      }
+    } catch {
+      toast.error('Error de conexión con pasarela de pagos')
       setPaso('confirmacion')
-      toast.success('Cita reservada exitosamente')
-    } else {
-      toast.error(res.error || 'Error al reservar')
     }
+
+    setReservando(false)
   }
 
   return (
@@ -101,10 +141,9 @@ export default function Reserva() {
         {/* Progress bar */}
         <div className="flex justify-between mb-8">
           {['servicio', 'barbero', 'fecha', 'horario', 'datos'].map((p, i) => {
-            const pasos = ['servicio', 'barbero', 'fecha', 'horario', 'datos']
-            const idx = pasos.indexOf(paso)
+            const idx = ['servicio', 'barbero', 'fecha', 'horario', 'datos'].indexOf(paso)
             const isActive = i <= idx
-            const isCurrent = pasos[i] === paso
+            const isCurrent = ['servicio', 'barbero', 'fecha', 'horario', 'datos'][i] === paso
             return (
               <div key={p} className="flex flex-col items-center">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
@@ -268,15 +307,44 @@ export default function Reserva() {
               <div className="flex gap-2 mt-6">
                 <Button variant="outline" onClick={() => setPaso('horario')}>Atrás</Button>
                 <Button className="flex-1" onClick={reservar} disabled={reservando || !cliente.nombre || !cliente.telefono}>
-                  {reservando ? 'Reservando...' : 'Reservar y Pagar'}
+                  {reservando ? (
+                    <><Loader className="h-4 w-4 mr-2 animate-spin" /> Procesando...</>
+                  ) : 'Reservar y Pagar'}
                 </Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Confirmación */}
-        {paso === 'confirmacion' && (
+        {/* Retorno de Mercado Pago: error/pending */}
+        {status === 'failure' && (
+          <Card>
+            <CardContent className="text-center py-12">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="h-8 w-8 text-red-600" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Pago no completado</h2>
+              <p className="text-muted-foreground mb-6">El pago no se procesó. Tu cita está pendiente.</p>
+              <Button onClick={() => navigate('/reserva')}>Intentar de nuevo</Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {status === 'pending' && (
+          <Card>
+            <CardContent className="text-center py-12">
+              <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Clock className="h-8 w-8 text-yellow-600" />
+              </div>
+              <h2 className="text-2xl font-bold mb-2">Pago Pendiente</h2>
+              <p className="text-muted-foreground mb-6">Estamos esperando la confirmación del pago.</p>
+              <Button onClick={() => navigate('/')}>Volver al Inicio</Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Confirmación exitosa */}
+        {paso === 'confirmacion' && (status === 'approved' || status === null) && (
           <Card>
             <CardContent className="text-center py-12">
               <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -289,6 +357,9 @@ export default function Reserva() {
               <p className="text-muted-foreground mb-6">
                 {fechaSel?.toLocaleDateString('es-CL')} a las {horarioSel}
               </p>
+              {status === 'approved' && (
+                <p className="text-sm text-green-600 mb-4">✅ Pago aprobado</p>
+              )}
               <Button onClick={() => navigate('/')}>Volver al Inicio</Button>
             </CardContent>
           </Card>
