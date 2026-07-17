@@ -6,19 +6,21 @@ import {
   Users,
   Clock,
   LogOut,
-  Bell,
   Menu,
   X,
+  ShoppingBag,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
+import NotificationsBell from '../notifications/NotificationsBell'
 
 const menuItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/admin/servicios', icon: Scissors, label: 'Servicios' },
   { href: '/admin/barberos', icon: Users, label: 'Barberos' },
   { href: '/admin/horarios', icon: Clock, label: 'Horarios' },
+  { href: '/admin/historial', icon: ShoppingBag, label: 'Historial' },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -34,7 +36,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {sidebarOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
         </button>
         <h1 className="font-semibold">Panel Admin</h1>
-        <Bell className="h-5 w-5 text-muted-foreground" />
+        <NotificationsBell />
       </div>
 
       {/* Sidebar overlay */}
